@@ -1,12 +1,15 @@
 from __future__ import print_function
 import argparse
 import torch
+from torch._C import AliasDb
 import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
 from torchvision import datasets, transforms
 from torch.optim.lr_scheduler import StepLR
-
+from PIL import Image
+import matplotlib.pyplot as plt
+import numpy as np
 
 class Net(nn.Module):
     def __init__(self):
@@ -36,9 +39,11 @@ class Net(nn.Module):
 
 def train(args, model, device, train_loader, optimizer, epoch):
     model.train()
-    for batch_idx, (data, target) in enumerate(train_loader):
-        data, target = data.to(device), target.to(device)
-        optimizer.zero_grad()
+    for batch_idx, (data, target) in enumerate(train_loader):#938轮 = 6万/64
+        #data：64张单通道28*28图片
+        #target：64个数字是几的10分类标签
+        data, target = data.to(device), target.to(device) 
+        optimizer.zero_grad() #梯度清零
         output = model(data)
         loss = F.nll_loss(output, target)
         loss.backward()
@@ -72,7 +77,7 @@ def test(model, device, test_loader):
 
 def main():
     # Training settings
-    parser = argparse.ArgumentParser(description='PyTorch MNIST Example')
+    parser = argparse.ArgumentParser(description='PyTorch MNIST Example')#argparse用于命令行与参数解析
     parser.add_argument('--batch-size', type=int, default=64, metavar='N',
                         help='input batch size for training (default: 64)')
     parser.add_argument('--test-batch-size', type=int, default=1000, metavar='N',
@@ -93,10 +98,10 @@ def main():
                         help='how many batches to wait before logging training status')
     parser.add_argument('--save-model', action='store_true', default=False,
                         help='For Saving the current Model')
-    args = parser.parse_args()
+    args = parser.parse_args() #参数对象。
     use_cuda = not args.no_cuda and torch.cuda.is_available()
 
-    torch.manual_seed(args.seed)
+    torch.manual_seed(args.seed)#为cpu设随机数种子
 
     device = torch.device("cuda" if use_cuda else "cpu")
 
@@ -110,28 +115,54 @@ def main():
         test_kwargs.update(cuda_kwargs)
 
     transform=transforms.Compose([
-        transforms.ToTensor(),
-        transforms.Normalize((0.1307,), (0.3081,))
-        ])
-    dataset1 = datasets.MNIST('../data', train=True, download=True,
-                       transform=transform)
-    dataset2 = datasets.MNIST('../data', train=False,
-                       transform=transform)
-    train_loader = torch.utils.data.DataLoader(dataset1,**train_kwargs)
-    test_loader = torch.utils.data.DataLoader(dataset2, **test_kwargs)
+        transforms.ToTensor(),#神经网络对[0,1]小数更高效
+        transforms.Normalize((0.1307,), (0.3081,))#转正态分布，防止多层网络梯度爆炸 [-2.x,5.x]
+    ])
+    dataset1 = datasets.MNIST('../data', train=True, download=True, transform=transform)
+    dataset2 = datasets.MNIST('../data', train=False, transform=transform)
+    train_loader = torch.utils.data.DataLoader(dataset1, **train_kwargs)# batch_size=64 控制dataloader的分片
+    test_loader  = torch.utils.data.DataLoader(dataset2, **test_kwargs)# batch_size=1000
 
     model = Net().to(device)
-    optimizer = optim.Adadelta(model.parameters(), lr=args.lr)
 
+    p = model.parameters()
+    optimizer = optim.Adadelta(model.parameters(), lr=args.lr)
     scheduler = StepLR(optimizer, step_size=1, gamma=args.gamma)
-    for epoch in range(1, args.epochs + 1):
+
+    for epoch in range(1, args.epochs + 1): #一轮6万
         train(args, model, device, train_loader, optimizer, epoch)
         test(model, device, test_loader)
-        scheduler.step()
+        scheduler.step() #改权重
 
     if args.save_model:
         torch.save(model.state_dict(), "mnist_cnn.pt")
 
 
 if __name__ == '__main__':
+    image = Image.open('./123.jpg')
+    aa = transforms.ToTensor()(image)
+    a1 = np.arange(36,dtype='uint8').reshape((3,4,3))
+    a2 = np.asarray(image)
+    print(a1)
+    print('分割线-----------')
+    print(a2)
+    print(len(a1), len(a2))
+    # bb=transforms.ToTensor()(a1)
+    # print(bb.data)
+    # kk = transforms.ToPILImage()(bb)
+    # print(kk)
+    # plt.imshow(kk)
+    # plt.show()
+    cc=transforms.Normalize((0.1307,), (0.3081,))(aa)
+    # print(cc.data)
+    # print('分割线--------------')
+    
     main()
+
+'''
+问题
+
+'''
+"""
+
+"""
