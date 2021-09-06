@@ -22,32 +22,34 @@ class Net(nn.Module):
         self.fc2 = nn.Linear(128, 10)
 
     def forward(self, x):
-        x = self.conv1(x)
+        # x = x           #(64,1,28,28)
+        x = self.conv1(x) #(64,32,26,26)
         x = F.relu(x)
-        x = self.conv2(x)
+        x = self.conv2(x) #(64,64,24,24)
         x = F.relu(x)
-        x = F.max_pool2d(x, 2)
+        x = F.max_pool2d(x, 2)  #(64,64,12,12)
         x = self.dropout1(x)
-        x = torch.flatten(x, 1)
-        x = self.fc1(x)
+        x = torch.flatten(x, 1) #(64,9216)  9216=64*12*12
+        x = self.fc1(x)   #(64,128)
         x = F.relu(x)
         x = self.dropout2(x)
-        x = self.fc2(x)
-        output = F.log_softmax(x, dim=1)
+        x = self.fc2(x)   #(64,10)
+        # output = nn.Softmax(dim=1)(x) #-0.228变-2.478？
+        output = nn.LogSoftmax(dim=1)(x) #-0.228变-2.478？
+        # output = F.log_softmax(x, dim=1) #-0.228变-2.478？
         return output
 
 
 def train(args, model, device, train_loader, optimizer, epoch):
     model.train()
-    for batch_idx, (data, target) in enumerate(train_loader):#938轮 = 6万/64
+    for batch_idx, (data, target) in enumerate(train_loader):# 938轮 = 6万/64
         #data：64张单通道28*28图片
-        #target：64个数字是几的10分类标签
-        data, target = data.to(device), target.to(device) 
+        data, target = data.to(device), target.to(device) #target：64个数字是几的10分类标签
         optimizer.zero_grad() #梯度清零
-        output = model(data)
+        output = model(data) #前馈
         loss = F.nll_loss(output, target)
-        loss.backward()
-        optimizer.step()
+        loss.backward()      #反馈
+        optimizer.step() #更新权重
         if batch_idx % args.log_interval == 0:
             print('Train Epoch: {} [{}/{} ({:.0f}%)]\tLoss: {:.6f}'.format(
                 epoch, batch_idx * len(data), len(train_loader.dataset),
@@ -132,7 +134,7 @@ def main():
     for epoch in range(1, args.epochs + 1): #一轮6万
         train(args, model, device, train_loader, optimizer, epoch)
         test(model, device, test_loader)
-        scheduler.step() #改权重
+        scheduler.step() #更新学习率
 
     if args.save_model:
         torch.save(model.state_dict(), "mnist_cnn.pt")
