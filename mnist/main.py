@@ -10,6 +10,8 @@ from torch.optim.lr_scheduler import StepLR
 from PIL import Image
 import matplotlib.pyplot as plt
 import numpy as np
+from torch.utils.tensorboard import SummaryWriter
+writer = SummaryWriter('runs/image_classify_tensorboard')
 
 class Net(nn.Module):
     def __init__(self):
@@ -35,22 +37,26 @@ class Net(nn.Module):
         x = self.dropout2(x)
         x = self.fc2(x)   #(64,10)
         # output = nn.Softmax(dim=1)(x) #-0.228变-2.478？
-        output = nn.LogSoftmax(dim=1)(x) #-0.228变-2.478？
-        # output = F.log_softmax(x, dim=1) #-0.228变-2.478？
-        return output
+        # output = nn.LogSoftmax(dim=1)(x) #-0.228变-2.478？
+        output = F.log_softmax(x, dim=1) #-0.228变-2.478？
+        return output #(64,10) 64张10分类，最大的是概率最高的分类
 
 
 def train(args, model, device, train_loader, optimizer, epoch):
     model.train()
     for batch_idx, (data, target) in enumerate(train_loader):# 938轮 = 6万/64
-        #data：64张单通道28*28图片
+        #data：(64张,1通道,28,28)图片
         data, target = data.to(device), target.to(device) #target：64个数字是几的10分类标签
         optimizer.zero_grad() #梯度清零
         output = model(data) #前馈
-        loss = F.nll_loss(output, target)
+        loss = F.nll_loss(output, target) #负对数似然损失
+        # plt.imshow(transforms.ToPILImage()(data[0]))
+        # plt.show()
         loss.backward()      #反馈
         optimizer.step() #更新权重
+        # writer.add_graph(model,(data,))
         if batch_idx % args.log_interval == 0:
+            
             print('Train Epoch: {} [{}/{} ({:.0f}%)]\tLoss: {:.6f}'.format(
                 epoch, batch_idx * len(data), len(train_loader.dataset),
                 100. * batch_idx / len(train_loader), loss.item()))
@@ -58,20 +64,24 @@ def train(args, model, device, train_loader, optimizer, epoch):
                 break
 
 
-def test(model, device, test_loader):
+def test(model, device, test_loader, epoch):
     model.eval()
     test_loss = 0
     correct = 0
     with torch.no_grad():
-        for data, target in test_loader:
+        for data, target in test_loader:#10轮
             data, target = data.to(device), target.to(device)
-            output = model(data)
-            test_loss += F.nll_loss(output, target, reduction='sum').item()  # sum up batch loss
-            pred = output.argmax(dim=1, keepdim=True)  # get the index of the max log-probability
-            correct += pred.eq(target.view_as(pred)).sum().item()
+            output = model(data) #(1000,1,28,28) -> (1000,10)
+            test_loss += F.nll_loss(output, target, reduction='sum').item()  # sum up batch loss (1000,10)和(1000)
+            pred = output.argmax(dim=1, keepdim=True)  # (1000,1) 得到最大对数概率的索引
+            target1 = target.view_as(pred) #y跟y^对齐(1000)->(1000,1) 
+            bt = pred.eq(target1)          #y跟y^相等，转bool (1000,1)
+            sum = bt.sum()                 #求和 false=0 true=1
+            cc = sum.item()                #数字张量转数字
+            correct += cc
 
-    test_loss /= len(test_loader.dataset)
-
+    test_loss /= len(test_loader.dataset) #平均损失=损失和/10000
+    # writer.add_scalar('test_loss', test_loss, epoch)
     print('\nTest set: Average loss: {:.4f}, Accuracy: {}/{} ({:.0f}%)\n'.format(
         test_loss, correct, len(test_loader.dataset),
         100. * correct / len(test_loader.dataset)))
@@ -133,7 +143,7 @@ def main():
 
     for epoch in range(1, args.epochs + 1): #一轮6万
         train(args, model, device, train_loader, optimizer, epoch)
-        test(model, device, test_loader)
+        test(model, device, test_loader, epoch)
         scheduler.step() #更新学习率
 
     if args.save_model:
