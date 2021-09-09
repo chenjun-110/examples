@@ -16,4 +16,6 @@ fast_neural_style/saved_models.zip
 # vi backups
 *~
 .history
-runs
+*/tensorboard
+*/**/.history
+*/**/runs
